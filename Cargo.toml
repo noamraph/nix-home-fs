@@ -1,0 +1,13 @@
+[package]
+name = "nix-home-fs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+fuser = { version = "0.13.0", default-features = false }
+libc = "0.2.51"
+env_logger = "0.9"
+clap = { version = "4.4.0", features = ["cargo", "derive"] }
+nix = { version = "0.26.2", features = ["user"] }
