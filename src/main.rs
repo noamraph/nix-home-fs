@@ -1,4 +1,6 @@
+use anyhow::Result;
 use clap::Parser;
+use daemonize::Daemonize;
 use fuser::{
     FileAttr, FileType, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry,
     Request,
@@ -7,6 +9,7 @@ use libc::ENOENT;
 use nix::unistd::User;
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
+use std::path::PathBuf;
 use std::time::{Duration, UNIX_EPOCH};
 
 const TTL: Duration = Duration::from_secs(1);
@@ -151,27 +154,59 @@ impl Filesystem for NixHomeFS {
 }
 
 #[derive(Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, author, arg_required_else_help = true)]
+#[clap(verbatim_doc_comment)]
+/// A very simple read-only filesystem, which has just 2 symlinks, `store` and `var`,
+/// pointing to `HOME/nix/store` and `HOME/nix/var`, where each user viewing the filesystem
+/// sees HOME referring to his home dir. This allows a very simple multi-user nix installation.
+/// -
+/// To mount, run:
+///   sudo nix-home-fs /nix
+/// Or, add this line to /etc/fstab:
+///   dummy-src /nix fuse./path/to/nix-home-fs dummy-opts 0 0
+/// And run:
+///   sudo mount /nix
 struct Cli {
     /// Mount options. Currently only for compatibility with `mount -t fuse.<path>`
     #[arg(short, value_name = "OPTS")]
     opts: Option<String>,
 
+    /// Run in foreground
+    #[arg(long)]
+    foreground: bool,
+
     /// If only one parameter is given, the mountpoint. If two parameters are given, ignored, for compatibility with `mount -t fuse.<path>`
-    dev_or_mountpoint: String,
+    dev_or_mountpoint: PathBuf,
 
     /// If given, where to mount the filesystem
-    mountpoint: Option<String>,
+    mountpoint: Option<PathBuf>,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let cli = Cli::parse();
     env_logger::init();
     let mountpoint = cli.mountpoint.unwrap_or(cli.dev_or_mountpoint);
-    let mut options = vec![MountOption::RO, MountOption::FSName("nix-home-fs".into()), MountOption::AllowOther];
-    // First try with AllowOther, and if it fails, mount without it.
-    if let Err(_) = fuser::mount2(NixHomeFS, &mountpoint, &options) {
-        options.pop();
-        fuser::mount2(NixHomeFS, &mountpoint, &options).unwrap()
-    }
+    let mut options = vec![
+        MountOption::RO,
+        MountOption::FSName("nix-home-fs".into()),
+        MountOption::AllowOther,
+    ];
+    let mut mount_fs = || {
+        // First try with AllowOther, and if it fails, mount without it.
+        let r = fuser::mount2(NixHomeFS, &mountpoint, &options);
+        if r.is_err() {
+            options.pop();
+            fuser::mount2(NixHomeFS, &mountpoint, &options)
+        } else {
+            r
+        }
+    };
+    if cli.foreground {
+        mount_fs()?;
+    } else {
+        let daemon = Daemonize::new().working_directory(".");
+        daemon.start()?;
+        mount_fs()?;
+    };
+    Ok(())
 }

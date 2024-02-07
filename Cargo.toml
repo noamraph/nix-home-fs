@@ -2,6 +2,7 @@
 name = "nix-home-fs"
 version = "0.1.0"
 edition = "2021"
+authors = ["Noam Yorav-Raphael <noamraph@gmail.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,3 +12,5 @@ libc = "0.2.51"
 env_logger = "0.9"
 clap = { version = "4.4.0", features = ["cargo", "derive"] }
 nix = { version = "0.26.2", features = ["user"] }
+daemonize = "0.5.0"
+anyhow = "1.0.79"
