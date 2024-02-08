@@ -186,26 +186,18 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     env_logger::init();
     let mountpoint = cli.mountpoint.unwrap_or(cli.dev_or_mountpoint);
-    let mut options = vec![
+    let options = vec![
         MountOption::RO,
         MountOption::FSName("nix-home-fs".into()),
         MountOption::AllowOther,
     ];
-    let mut mount_fs = || {
-        // First try with AllowOther, and if it fails, mount without it.
-        let r = fuser::mount2(NixHomeFS, &mountpoint, &options);
-        if r.is_err() {
-            options.pop();
-            fuser::mount2(NixHomeFS, &mountpoint, &options)
-        } else {
-            r
-        }
+    let mount_fs = || {
+        fuser::mount2(NixHomeFS, &mountpoint, &options)
     };
     if cli.foreground {
         mount_fs()?;
     } else {
-        let daemon = Daemonize::new().working_directory(".");
-        daemon.start()?;
+        Daemonize::new().start()?;
         mount_fs()?;
     };
     Ok(())
